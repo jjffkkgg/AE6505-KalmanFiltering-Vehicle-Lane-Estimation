@@ -1,0 +1,15 @@
+# workspace cache dir
+.metadata
+.github
+.cache
+.vscode
+
+# cache file
+*.asv
+*.pyc
+
+# Install subdir
+gnat_community_install_script/
+
+# Jupyter Notebook
+.ipynb_checkpoints

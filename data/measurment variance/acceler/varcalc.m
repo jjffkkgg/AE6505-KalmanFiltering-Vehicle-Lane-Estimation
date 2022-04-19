@@ -10,9 +10,9 @@ z = z_data.data(:,4);
 
 cov_mat = [std(x), 0, 0;
             0, std(y), 0;
-            0, 0, std(z)];
+            0, 0, std(z)]
 g = 9.807;  % m/s
 
-diff_x = mean(x)-g;
-diff_y = mean(y)-g;
-diff_z = mean(z)-g;
+diff_x = mean(x)-g
+diff_y = mean(y)-g
+diff_z = mean(z)-g
