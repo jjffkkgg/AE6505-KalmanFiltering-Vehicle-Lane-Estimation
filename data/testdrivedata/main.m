@@ -28,11 +28,14 @@ quat_0 = angle2quat(angle_0(1),angle_0(2),angle_0(3),'ZYX');
 X0 = [0;            % x [m] (NED)
       0;            % y [m] (NED)
       0;            % z [m] (NED)
-      quat_0';     % orientation [rad] (NED quat)
+      quat_0';      % orientation [rad] (NED quat)
       0;            % v_x [m/s] (phone frame)
       0;            % v_y [m/s] (phone frame)
-      0;            % v_z [m/s] (phone frame)
-      zeros(3,1)];  % angular vel [rad/s] (phone frame)
+      0];            % v_z [m/s] (phone frame)
+%       zeros(3,1)];  % angular vel [rad/s] (phone frame)
+      % (10,1)
+
+[n,~] = size(X0);
       
 Y0 = [33.78207;         % Latitude
       -84.39507         % Longitude
@@ -42,43 +45,149 @@ Y0 = [33.78207;         % Latitude
 
 g = 9.807;
   
-P0 = diag([0,0,0,0,0,0,0,0.0132,0.0116,0.0099,0.0867,0.0195,0.07]);
-R = diag([4.6912e-06,1.2049e-06,0.3077]);
+P0 = diag([10,10,10,...
+            0.1,0.1,0.1,0.1,...
+            3,3,3]);
+%             deg2rad(10),deg2rad(10),deg2rad(10)]);
+        
+Q = diag([0,0,0,...
+        angle2quat(0.0075,0.004,0.0049,'ZYX'),...
+        1.755e-4,1.352e-4,0.983e-4]);
+%         0.0867,0.0195,0.07]);       % State error covariance matrix
+    
+R = diag([1.1964e-12,1.1964e-12,0.0947]);   % measurment error covariance matrix
 
-data_acc(:,2) = data_acc(:,2) - 0.0251;
-data_acc(:,3) = data_acc(:,3) + 0.1228 - g;
-data_acc(:,4) = data_acc(:,4) - 0.0409;
+data_acc(:,1) = data_acc(:,1) - 0.0251;
+data_acc(:,2) = data_acc(:,2) + 0.1228 - g;
+data_acc(:,3) = data_acc(:,3) - 0.0409;
+
+
 
 % Unscented Kalman Filter Algorithm
+tic
 for k = 1:data_size
     if k == 1
-        
-        pos_b = X0(1:3);
-        quat_b = X0(4:7);
-        v_p = X0(8:10);
-        omega_p = X0(end-2:end)';
+        X_post = X0;
         P_post = P0;
+        prop_nums = 0;  % detect 1s update of gps even if it do not move
+        gps_prev = Y0';
+        X_est = [X0];
+    else
+        gps_prev = data_gps(k-1,:);
+        X_post = X_post_new;
+        P_post = P_post_new;
     end
     
-    acc_k = data_acc(k,2:4);
-    gyro_k = data_gyro(k,2:4);
-    gps_k = data_gps(k,2:4);
+    acc_k = data_acc(k,:);      % (1,3)
+    gyro_k = data_gyro(k,:);    % (1,3)
+    gps_k = data_gps(k,:);      % (1,3)
     
-
-    d_pos_b = angle2dcm(angle_b(1),angle_b(2),angle_b(3),'ZYX') * v_p;
-    d_quat_b = quat_kinematics(omega_p,quat_b);
-    d_v_p = acc_k';
-    d_omega_p = gyro_k';
+    for q = 1:3
+        gps_diffsum = (gps_k(q) - gps_prev(q));
+    end
     
-    pos_b_prior = d_pos_b*dt + pos_b;
-    quat_b_prior = d_quat_b*dt + quat_b;
-    v_p_prior = d_v_p*dt + v_p;
-    omega_p_prior = d_omega_p*dt + omega_p;
+    propagate = ((gps_diffsum == 0) && (prop_nums < 10));
     
-    %%%% Time update
+    %%%%%%%%%%%%%%%%%%%%%%%%% UKF Filtering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%% Time update %%%%%%%
     % 1. generate sigma point
     [root,p] = chol(n*P_post);
+    
+    for j = 1:n
+        sigma(:,j) = X_post + root(j,:)';
+        sigma(:,j+n) = X_post - root(j,:)';
+    end
+    
+    % 2. propagate with nonlin
+     for j = 1:2*n
+         prop_sigma(:,j) = sigma(:,j) + X_kinematics(sigma(:,j), acc_k, gyro_k)*dt;
+     end
+     
+     % 3. generate apriori of x
+     X_prior = zeros(n,1);
+     for j = 1:2*n
+         X_prior = X_prior + prop_sigma(:,j);
+     end
+     X_prior = X_prior/(2*n);
+
+     % 4. generate apriori of P
+     P_prior = zeros(n,1);
+     for j = 1:2*n
+         P_prior = P_prior + (prop_sigma(:,j) - X_prior)*...
+                             (prop_sigma(:,j) - X_prior)';
+     end
+     P_prior = P_prior/(2*n) + Q;
+     
+     if propagate
+         X_post_new = X_prior;
+         P_post_new = P_prior;
+         prop_nums = prop_nums + 1;
+         
+     else
+         %%%%%%% Measurment update %%%%%%% (updated every 1s with gps)
+         % 1. generate sigma points
+         [root,p] = chol(n*P_prior);
+
+        for j = 1:n
+            sigma(:,j) = X_prior + root(j,:)';
+            sigma(:,j+n) = X_prior - root(j,:)';
+        end
+
+        % 2. generate measurment to sigma points
+        for j = 1:2*n
+            dsigma_y = ned2gps(sigma(:,j), Y0);
+            sigma_y(:,j) = Y0 + dsigma_y;
+        end
+
+        % 3. combine to generate predicted meas at time t_k
+        y_hat = zeros(3,1);
+         for j = 1:2*n
+             y_hat = y_hat + sigma_y(:,j);
+         end
+         y_hat = y_hat/(2*n);
+
+         % 4. generate measurement variance
+%          R = diag([25,deg2rad(0.1)^2,deg2rad(0.1)^2]);
+         Py = zeros(3,3);
+         for j = 1:2*n
+             Py = Py + (sigma_y(:,j) - y_hat)*...
+                             (sigma_y(:,j) - y_hat)';
+         end
+         Py = Py/(2*n) + R; % (3*3)
+
+         % 5. estimate cross cov between x,y
+         Pxy = zeros(n,3);
+         for j = 1:2*n
+             Pxy = Pxy + (prop_sigma(:,j) - X_prior)*...
+                             (sigma_y(:,j) - y_hat)'; % (13*1)*(1*3)
+         end
+         Pxy = Pxy/(2*n); % (6*3)
+
+         % 6. Kalman Gain
+         K = Pxy*pinv(Py); % (6*3)
+
+         % 7. compute Measurement update
+         X_post_new = X_prior + K*(gps_k' - y_hat);
+         P_post_new = P_prior - K * Py * K';
+         
+         prop_nums = 0;
+     end
+     X_est = [X_est, X_post_new];
 end
+toc
+
+figure(1)
+plot3(X_est(2,1:end),X_est(1,1:end),-X_est(3,1:end))
+grid on
+xlabel('E')
+ylabel('N')
+zlabel('H')
+figure(2)
+plot(X_est(2,1:end),X_est(1,1:end))
+grid on
+xlabel('E')
+ylabel('N')
 
 %% Phase 2 [Non-highway]
-      
+
+% clear;

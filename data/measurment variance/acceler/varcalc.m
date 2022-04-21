@@ -8,9 +8,9 @@ x = x_data.data(:,2);
 y = y_data.data(:,3);
 z = z_data.data(:,4);
 
-cov_mat = [std(x), 0, 0;
-            0, std(y), 0;
-            0, 0, std(z)]
+cov_mat = [std(x)^2, 0, 0;
+            0, std(y)^2, 0;
+            0, 0, std(z)^2]
 g = 9.807;  % m/s
 
 diff_x = mean(x)-g

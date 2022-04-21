@@ -8,6 +8,6 @@ z = data.data(:,4);
 figure(1)
 plot(z)
 
-cov_mat = [std(x), 0, 0;
-            0, std(y), 0;
-            0, 0, std(z)];
+cov_mat = [std(x)^2, 0, 0;
+            0, std(y)^2, 0;
+            0, 0, std(z)^2]

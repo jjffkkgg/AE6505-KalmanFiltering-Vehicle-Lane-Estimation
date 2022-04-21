@@ -13,8 +13,8 @@ function dy = ned2gps(dx, y)
         ) * 1000 + alt;
          % earth radius @ lat [m]
     
-    dlat = dx(1) / R;
-    dlong = dx(2) / R;
-    dalt = -dx(3) / R;
+    dlat = rad2deg(dx(1) / R);
+    dlong = rad2deg(dx(2) / R);
+    dalt = -dx(3);
     dy = [dlat; dlong; dalt];
 end
