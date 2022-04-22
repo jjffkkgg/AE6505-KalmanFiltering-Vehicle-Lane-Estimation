@@ -8,9 +8,11 @@ acc = importdata('./first/Accelerometer.csv');
 
 start_index = 2493;
 end_index = 13475;
+gps_delay = 1; % [s]
+gps_delay_index = gps_delay*10; % [s]
 
 data_gyro = gyro.data(1:end_index,2:end);
-data_gps = gps.data(1:end_index,2:end);
+data_gps = gps.data(1+gps_delay_index:end_index+gps_delay_index,2:end);
 data_acc = acc.data(1:end_index,2:end);
 
 [data_size,~] = size(data_gps);
@@ -45,14 +47,14 @@ Y0 = [33.78207;         % Latitude
 
 g = 9.807;
   
-P0 = diag([10,10,10,...
-            0.1,0.1,0.1,0.1,...
-            3,3,3]);
+P0 = diag([5,5,5,...
+            0.1,0.01,0.01,0.01,...
+            0.5,0.5,0.5]);
 %             deg2rad(10),deg2rad(10),deg2rad(10)]);
         
 Q = diag([0,0,0,...
-        angle2quat(0.0075,0.004,0.0049,'ZYX'),...
-        1.755e-4,1.352e-4,0.983e-4]);
+        0.0246,0.0062,0.0031,0.0012,...
+        1.755e-3,1.352e-3,0.983e-3]);
 %         0.0867,0.0195,0.07]);       % State error covariance matrix
     
 R = diag([1.1964e-12,1.1964e-12,0.0947]);   % measurment error covariance matrix
@@ -72,6 +74,7 @@ for k = 1:data_size
         prop_nums = 0;  % detect 1s update of gps even if it do not move
         gps_prev = Y0';
         X_est = [X0];
+        y_est = [Y0];
     else
         gps_prev = data_gps(k-1,:);
         X_post = X_post_new;
@@ -173,6 +176,8 @@ for k = 1:data_size
          prop_nums = 0;
      end
      X_est = [X_est, X_post_new];
+     dy = ned2gps(X_post_new,Y0);
+     y_est = [y_est, dy+Y0];
 end
 toc
 
@@ -187,6 +192,12 @@ plot(X_est(2,1:end),X_est(1,1:end))
 grid on
 xlabel('E')
 ylabel('N')
+
+figure(3)
+geoplot(y_est(1,:),y_est(2,:),'r','LineWidth',2)
+geobasemap('satellite')
+
+% writematrix(m,'Est_y.csv')
 
 %% Phase 2 [Non-highway]
 
