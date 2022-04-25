@@ -8,7 +8,7 @@ acc = importdata('./first/Accelerometer.csv');
 
 start_index = 2493;
 end_index = 13475;
-gps_delay = 0; % [s]
+gps_delay = 2.5   ; % [s]
 gps_delay_index = gps_delay*10; % [s]
 
 data_gyro = gyro.data(1:end_index,2:end);
@@ -23,18 +23,18 @@ dt = 0.1;    % [s]
 
 % orientation
 % body frame NED
-angle_0 = [-pi/2, 0, pi/2]; % initial angle from NED, Z-Y-X from phone to body frame
-dcm_0 = angle2dcm(angle_0(1),angle_0(2),angle_0(3),'ZYX');
-quat_0 = angle2quat(angle_0(1),angle_0(2),angle_0(3),'ZYX');
+angle_0 = [-pi/2, 0, pi/2]; % initial frame angle from NED, Z-Y-X to phone body frame (NED -> phone)
+dcm_0 = angle2dcm(-angle_0(1),-angle_0(2),-angle_0(3),'ZYX');  % following DCM in AircraftAndSim book
+quat_0 = angle2quat(-angle_0(1),-angle_0(2),-angle_0(3),'ZYX');
 
 X0 = [0;            % x [m] (NED)
       0;            % y [m] (NED)
       0;            % z [m] (NED)
       quat_0';      % orientation [rad] (NED quat)
-      0;            % v_x [m/s] (phone frame)
-      0;            % v_y [m/s] (phone frame)
-      0];            % v_z [m/s] (phone frame)
-%       zeros(3,1)];  % angular vel [rad/s] (phone frame)
+      0;            % v_x [m/s] (vehicle frame)
+      0;            % v_y [m/s] (vehicle frame)
+      0];            % v_z [m/s] (vehicle frame)
+%       zeros(3,1)];  % angular vel [rad/s] (vehicle frame)
       % (10,1)
 
 [n,~] = size(X0);
@@ -47,14 +47,14 @@ Y0 = [33.78207;         % Latitude
 
 g = 9.807;
   
-P0 = diag([10,10,10,...
-            0.1,0.01,0.01,0.01,...
-            1,1,1]);
+P0 = diag([100,100,100,...
+            0.0001,0.00001,0.00001,0.00001,...
+            0.1,0.1,0.1]);
 %             deg2rad(10),deg2rad(10),deg2rad(10)]);
         
-Q = diag([0,0,0,...
-        0.0246,0.0062,0.0031,0.0012,...
-        1.755e-3,1.352e-3,0.983e-3]);
+Q = diag([1.755e-2,1.352e-2,0.983e-2,...
+        9.3639e-05,2.7136e-06,2.6480e-07,7.0453e-08,...
+        1.755e-2,1.352e-2,0.983e-2]);
 %         0.0867,0.0195,0.07]);       % State error covariance matrix
     
 R = diag([1.1964e-12,1.1964e-12,0.0947]);   % measurment error covariance matrix
@@ -93,7 +93,7 @@ for k = 1:data_size
     gps_diffalt = gps_k(3) - gps_prev(3);   % use diff for alt b/c lat long diff is too small
     gps_diff2d = norm(gps_k(1:2) - gps_prev(1:2));
 
-%     propagate = 0;
+%     propagate = 1;
 %     propagate = ((gps_diffalt == 0) && (prop_nums < 10));
     propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
             ((gps_diffalt == 0) && (prop_nums < 10));
@@ -110,7 +110,8 @@ for k = 1:data_size
     
     % 2. propagate with nonlin
      for j = 1:2*n
-         prop_sigma(:,j) = sigma(:,j) + X_kinematics(sigma(:,j), acc_k, gyro_k)*dt;
+         dX = X_kinematics(sigma(:,j), acc_k, gyro_k)*dt;
+         prop_sigma(:,j) = sigma(:,j) + dX;
      end
      
      % 3. generate apriori of x
@@ -118,7 +119,7 @@ for k = 1:data_size
      for j = 1:2*n
          X_prior = X_prior + prop_sigma(:,j);
      end
-     X_prior = X_prior/(2*n);
+     X_prior = X_prior./(2*n);
 
      % 4. generate apriori of P
      P_prior = zeros(n,n);
@@ -212,12 +213,15 @@ legend('Filtered','GPS plotting')
 
 [~,y_index]=size(y_est);
 num_csvs = fix(y_index / 2000);
+
 for i=1:num_csvs-1
     y_est(:,i*2000+1:(i+1)*2000+1);
 end
+
 % for i = 1:num_csvs-1
 %     writematrix(y_est(:,num_csvs*2000+1:(num_csvs+1)*2000+1),'Est_y.csv')
 % end
+
 
 %% Phase 2 [Non-highway]
 
@@ -243,9 +247,9 @@ dt = 0.1;    % [s]
 
 % orientation
 % body frame NED
-angle_0 = [-pi/2, 0, deg2rad(-40+90)]; % initial angle from NED, Z-Y-X from phone to body frame
-dcm_0 = angle2dcm(angle_0(1),angle_0(2),angle_0(3),'ZYX');
-quat_0 = angle2quat(angle_0(1),angle_0(2),angle_0(3),'ZYX');
+angle_0 = [pi/2, 0, deg2rad(-50)]; % initial angle from NED, Z-Y-X from phone to body frame
+% dcm_0 = angle2dcm(angle_0(1),angle_0(2),angle_0(3),'ZYX');
+quat_0 = angle2quat(-angle_0(1),-angle_0(2),-angle_0(3),'ZYX');
 
 X0 = [0;            % x [m] (NED)
       0;            % y [m] (NED)
@@ -267,15 +271,15 @@ Y0 = [33.908439;         % Latitude
 
 g = 9.807;
   
-P0 = diag([10,10,10,...
-            0.1,0.01,0.01,0.01,...
-            1,1,1]);
+
+P0 = diag([100,100,100,...
+            0.0001,0.00001,0.00001,0.00001,...
+            0.1,0.1,0.1]);
 %             deg2rad(10),deg2rad(10),deg2rad(10)]);
         
-Q = diag([0,0,0,...
-        0.0246,0.0062,0.0031,0.0012,...
-        1.755e-3,1.352e-3,0.983e-3]);
-%         0.0867,0.0195,0.07]);       % State error covariance matrix
+Q = diag([1.755e-2,1.352e-2,0.983e-2,...
+        9.3639e-05,2.7136e-06,2.6480e-07,7.0453e-08,...
+        1.755e-2,1.352e-2,0.983e-2]);
     
 R = diag([1.1964e-12,1.1964e-12,0.0947]);   % measurment error covariance matrix
 
@@ -316,7 +320,7 @@ for k = 1:data_size
 %     propagate = 0;
 %     propagate = ((gps_diffalt == 0) && (prop_nums < 10));
     propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
-            ((gps_diffalt == 0) && (prop_nums < 10));
+            ((gps_diff2d == 0) && (prop_nums < 10));
     
     %%%%%%%%%%%%%%%%%%%%%%%%% UKF Filtering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%% Time update %%%%%%%
@@ -414,6 +418,7 @@ grid on
 xlabel('E')
 ylabel('N')
 zlabel('H')
+
 figure(5)
 plot(X_est(2,1:end),X_est(1,1:end))
 grid on
@@ -421,7 +426,7 @@ xlabel('E')
 ylabel('N')
 
 figure(6)
-geoplot(y_est(1,:),y_est(2,:),'r','LineWidth',2)
+geoplot(y_est(1,:),y_est(2,:),'r.','LineWidth',2)
 geobasemap('satellite')
 title('Satelite Plotting Path 2')
 
