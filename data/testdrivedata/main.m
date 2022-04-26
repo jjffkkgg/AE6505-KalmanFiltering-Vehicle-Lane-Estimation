@@ -8,7 +8,7 @@ acc = importdata('./first/Accelerometer.csv');
 
 start_index = 2493;
 end_index = 13475;
-gps_delay = 2.5   ; % [s]
+gps_delay = 2   ; % [s]
 gps_delay_index = gps_delay*10; % [s]
 
 data_gyro = gyro.data(1:end_index,2:end);
@@ -93,10 +93,11 @@ for k = 1:data_size
     gps_diffalt = gps_k(3) - gps_prev(3);   % use diff for alt b/c lat long diff is too small
     gps_diff2d = norm(gps_k(1:2) - gps_prev(1:2));
 
-%     propagate = 1;
-%     propagate = ((gps_diffalt == 0) && (prop_nums < 10));
+    % GPS ignorance condition
+%     propagate = 1;                          % mere IMU propagation
+%     propagate = ((gps_diff2d == 0) && (prop_nums < 10));     % not filtering 
     propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
-            ((gps_diffalt == 0) && (prop_nums < 10));
+            ((gps_diff2d == 0) && (prop_nums < 30));
     
     %%%%%%%%%%%%%%%%%%%%%%%%% UKF Filtering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%% Time update %%%%%%%
@@ -189,6 +190,8 @@ for k = 1:data_size
 end
 toc
 
+%%% plot the result
+
 figure(1)
 plot3(X_est(2,1:end),X_est(1,1:end),-X_est(3,1:end))
 grid on
@@ -202,7 +205,7 @@ xlabel('E')
 ylabel('N')
 
 figure(3)
-geoplot(y_est(1,:),y_est(2,:),'r.','LineWidth',2)
+geoplot(y_est(1,:),y_est(2,:),'r','LineWidth',2)
 geobasemap('satellite')
 title('Satelite Plotting Path 1')
 
@@ -273,7 +276,7 @@ g = 9.807;
   
 
 P0 = diag([100,100,100,...
-            0.0001,0.00001,0.00001,0.00001,...
+            0.0001,0.0001,0.0001,0.0001,...
             0.1,0.1,0.1]);
 %             deg2rad(10),deg2rad(10),deg2rad(10)]);
         
@@ -317,10 +320,11 @@ for k = 1:data_size
     gps_diffalt = gps_k(3) - gps_prev(3);   % use diff for alt b/c lat long diff is too small
     gps_diff2d = norm(gps_k(1:2) - gps_prev(1:2));
 
-%     propagate = 0;
-%     propagate = ((gps_diffalt == 0) && (prop_nums < 10));
-    propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
-            ((gps_diff2d == 0) && (prop_nums < 10));
+%    % GPS ignorance condition
+%     propagate = 1;                          % mere IMU propagation
+    propagate = ((gps_diff2d == 0) && (prop_nums < 10));     % not filtering 
+%     propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
+%             ((gps_diff2d == 0) && (prop_nums < 30));
     
     %%%%%%%%%%%%%%%%%%%%%%%%% UKF Filtering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%% Time update %%%%%%%
@@ -426,7 +430,7 @@ xlabel('E')
 ylabel('N')
 
 figure(6)
-geoplot(y_est(1,:),y_est(2,:),'r.','LineWidth',2)
+geoplot(y_est(1,:),y_est(2,:),'r','LineWidth',2)
 geobasemap('satellite')
 title('Satelite Plotting Path 2')
 
