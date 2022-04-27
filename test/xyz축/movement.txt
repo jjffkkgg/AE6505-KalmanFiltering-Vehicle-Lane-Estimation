@@ -1,8 +1,0 @@
-
-C -> 남쪽 방향위, 화면 위로
-
-CFCRC & CW
-
-rotation축
-
-옆
