@@ -322,7 +322,7 @@ for k = 1:data_size
 
 %    % GPS ignorance condition
 %     propagate = 1;                          % mere IMU propagation
-    propagate = ((gps_diff2d == 0) && (prop_nums < 10));     % not filtering 
+    propagate = ((gps_diff2d == 0) && (prop_nums < 10));     % not filter out 3sigma
 %     propagate = (gps_diff2d > 3*sqrt(sum(pos_var))) ||...
 %             ((gps_diff2d == 0) && (prop_nums < 30));
     
@@ -437,3 +437,4 @@ title('Satelite Plotting Path 2')
 hold on
 geoplot(data_gps(:,1),data_gps(:,2),'b.','LineWidth',2)
 legend('Filtered','GPS plotting')
+hold off
